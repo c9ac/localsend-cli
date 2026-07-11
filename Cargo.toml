@@ -1,0 +1,13 @@
+[package]
+name    = "localsend-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zfish = "0.1.10"
+
+[profile.release]
+codegen-units = 1
+lto           = true
+panic         = "abort"
+strip         = true
