@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-zfish = "0.1.10"
+miniserde = "0.1.45"
+zfish     = "0.1.10"
 
 [profile.release]
 codegen-units = 1
 lto           = true
+opt-level     = "s"
 panic         = "abort"
 strip         = true

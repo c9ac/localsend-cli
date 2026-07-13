@@ -1,10 +1,26 @@
+mod message;
+mod receive;
+
+use receive::receive;
+use std::{error::Error, process::exit};
 use zfish::command::{App, Arg, Command};
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let app = App::new(env!("CARGO_PKG_NAME"))
         .version(format!("v{}", env!("CARGO_PKG_VERSION")))
         .about("A cli localsend client")
-        .arg(Arg::new("name").short('n').long("name"))
+        .arg(
+            Arg::new("alias")
+                .short('n')
+                .long("alias")
+                .default_value("my_device"),
+        )
+        .arg(
+            Arg::new("port")
+                .short('p')
+                .long("port")
+                .default_value("53317"),
+        )
         .subcommand(Command::new("receive").about("Prepare to receive file"))
         .subcommand(
             Command::new("send")
@@ -14,12 +30,18 @@ fn main() {
 
     let matches = app.get_matches();
 
+    let alias = matches.value_of("alias").unwrap_or("my_device");
+    let port = matches.value_of("port").unwrap_or("53317").parse()?;
+
     match matches.subcommand() {
-        Some(("receive", _)) => todo!(),
+        Some(("receive", _)) => receive(alias, port),
         Some(("send", sub_matches)) => {
-            let file = sub_matches.value_of("file");
+            let _file = sub_matches.value_of("file");
             todo!();
         }
-        _ => eprintln!("Use --help for usage"),
+        _ => {
+            eprintln!("Use --help for usage");
+            exit(1);
+        }
     }
 }
