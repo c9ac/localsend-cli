@@ -1,14 +1,15 @@
-use crate::{Announce, DynError, PrepareUpload, convert_storage_unit};
+use crate::{AcceptUpload, Announce, DynError, PrepareUpload, convert_storage_unit};
 use miniserde::json;
 use std::{
+    collections::HashMap,
     net::{Ipv4Addr, UdpSocket},
     thread,
     time::Duration,
 };
-use tiny_http::{Method, Request, Server};
+use tiny_http::{Method, Request, Response, Server, StatusCode};
 use zfish::{
     Prompt,
-    table::{Alignment, BoxStyle, Table},
+    table::{BoxStyle, Table},
 };
 
 pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
@@ -22,9 +23,26 @@ pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
         let mut body = String::new();
         request.as_reader().read_to_string(&mut body)?;
 
-        if let Some(prepare_upload) = handle_request(&request, &body)? {
-            let _is_receive = confirm_upload(&prepare_upload)?;
-        }
+        // Listen to new urls if prepare upload request occur
+        match handle_request(&request, &body) {
+            Ok(Some(prepare_upload)) => {
+                match respond_upload(&prepare_upload) {
+                    Ok(files) => request.respond(Response::from_string(files))?,
+                    Err(e) => {
+                        if e.to_string() == "reject" {
+                            request.respond(Response::empty(StatusCode::from(403)))?;
+                        } else {
+                            request.respond(Response::empty(StatusCode::from(500)))?;
+                        }
+                    }
+                };
+            }
+            Err(_) => {
+                request.respond(Response::empty(StatusCode::from(400)))?;
+                continue;
+            }
+            _ => (),
+        };
     }
 
     Ok(())
@@ -62,11 +80,7 @@ fn confirm_upload(prepare_upload: &PrepareUpload) -> Result<bool, DynError> {
 
     let mut table = Table::new(vec!["", "File Name", "Size", "File Type", "From"]);
 
-    table
-        .set_box_style(BoxStyle::Rounded)
-        .set_column_alignment(0, Alignment::Center)
-        .set_column_alignment(1, Alignment::Center)
-        .set_column_alignment(2, Alignment::Center);
+    table.set_box_style(BoxStyle::Rounded);
 
     for (num, file_info) in (1..).zip(files.values()) {
         table.add_row(vec![
@@ -81,4 +95,25 @@ fn confirm_upload(prepare_upload: &PrepareUpload) -> Result<bool, DynError> {
     table.print();
 
     Ok(Prompt::confirm("Receive?", true)?)
+}
+
+fn respond_upload(prepare_upload: &PrepareUpload) -> Result<String, DynError> {
+    let is_receive = confirm_upload(prepare_upload)?;
+
+    let mut files = HashMap::new();
+    for file in prepare_upload.files.values() {
+        files.insert(file.id.clone(), file.id.clone()); // use files id as token
+    }
+
+    let accept_upload = AcceptUpload {
+        session_id: "session0".into(),
+        files,
+    };
+    let accept_upload = json::to_string(&accept_upload);
+
+    if is_receive {
+        Ok(accept_upload)
+    } else {
+        Err("reject".into())
+    }
 }
