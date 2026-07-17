@@ -1,11 +1,8 @@
-mod message;
-mod receive;
-
-use receive::receive;
-use std::{error::Error, process::exit};
+use localsend_cli::{DynError, receive};
+use std::process::exit;
 use zfish::command::{App, Arg, Command};
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), DynError> {
     let app = App::new(env!("CARGO_PKG_NAME"))
         .version(format!("v{}", env!("CARGO_PKG_VERSION")))
         .about("A cli localsend client")
