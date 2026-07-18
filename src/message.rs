@@ -56,3 +56,14 @@ impl Announce {
         }
     }
 }
+
+impl PrepareUpload {
+    pub fn new() -> Self {
+        let info = Announce::build("", 53317);
+
+        PrepareUpload {
+            info,
+            files: HashMap::new(),
+        }
+    }
+}
