@@ -3,21 +3,18 @@ use miniserde::json;
 use std::{
     collections::HashMap,
     fs::File,
-    io::copy,
+    io::Write,
     net::{Ipv4Addr, UdpSocket},
     thread,
     time::Duration,
 };
 use tiny_http::{Method, Response, Server, StatusCode};
 use zfish::{
-    Alignment, Prompt, Terminal,
+    Alignment, ProgressBar, ProgressStyle, Prompt, Terminal,
     table::{BoxStyle, Table},
 };
 
 pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
-    Terminal::clear_screen()?;
-    Terminal::move_cursor(0, 0)?;
-
     let device = Announce::build(alias, port);
 
     announce(&device)?;
@@ -53,39 +50,38 @@ pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
         else if request.url().starts_with("/api/localsend/v2/upload?")
             && request.method() == &Method::Post
         {
-            // Get file name by file id
-            let file_id = request
-                .url()
-                .split("&")
-                .find(|s| s.starts_with("fileId="))
-                .and_then(|s| s.get(7..))
-                .map(|s| s.to_string());
+            let (mut file, file_size, file_id) =
+                receive_file(request.url(), &prepare_upload, &mut unknown_count)?;
 
-            if file_id.is_none() {
-                request.respond(Response::empty(StatusCode(500)))?;
-                continue;
-            }
-            let file_id = file_id.unwrap();
+            // Setup progress bar
+            let mut progress_bar =
+                ProgressBar::new(file_size as u64).with_style(ProgressStyle::Arrow);
+
+            // Show `downloading` status
+            file_status.insert(file_id.to_string(), "downloading".to_string());
+            draw_table(&prepare_upload, &file_status)?;
 
             // Write to file
-            let file_path = match prepare_upload.files.get(&file_id) {
-                Some(file_info) => &file_info.file_name,
-                None => {
-                    unknown_count += 1;
-                    &format!("localsend_file_{}", unknown_count)
+            let mut buffer = [0; 8192];
+            let mut downloaded = 0;
+            loop {
+                let n = request.as_reader().read(&mut buffer)?;
+                if n == 0 {
+                    break;
                 }
-            };
-            let mut file = File::create(file_path)?;
-            copy(request.as_reader(), &mut file)?;
+                file.write_all(&buffer[..n])?;
+
+                // Update progress bar
+                downloaded += n;
+                progress_bar.set(downloaded as u64);
+            }
 
             // Response when complete
             request.respond(Response::empty(StatusCode::from(204)))?;
 
             // Reoutput table
-            Terminal::clear_screen()?;
-            Terminal::move_cursor(0, 0)?;
             file_status.insert(file_id.to_string(), "✅".to_string());
-            draw_table(&prepare_upload, &file_status);
+            draw_table(&prepare_upload, &file_status)?;
         }
     }
 
@@ -111,12 +107,15 @@ fn announce(device: &Announce) -> Result<(), DynError> {
 
 fn confirm_upload(prepare_upload: &PrepareUpload) -> Result<bool, DynError> {
     let file_status = HashMap::new();
-    draw_table(prepare_upload, &file_status);
+    draw_table(prepare_upload, &file_status)?;
 
     Ok(Prompt::confirm("Receive?", true)?)
 }
 
-fn draw_table(prepare_upload: &PrepareUpload, file_staus: &HashMap<String, String>) {
+fn draw_table(
+    prepare_upload: &PrepareUpload,
+    file_staus: &HashMap<String, String>,
+) -> Result<(), DynError> {
     let files = &prepare_upload.files;
     let alias = &prepare_upload.info.alias;
 
@@ -137,7 +136,11 @@ fn draw_table(prepare_upload: &PrepareUpload, file_staus: &HashMap<String, Strin
         ]);
     }
 
+    Terminal::clear_screen()?;
+    Terminal::move_cursor(0, 0)?;
     table.print();
+
+    Ok(())
 }
 
 fn respond_upload(prepare_upload: &PrepareUpload) -> Result<String, DynError> {
@@ -159,4 +162,33 @@ fn respond_upload(prepare_upload: &PrepareUpload) -> Result<String, DynError> {
     } else {
         Err("reject".into())
     }
+}
+
+fn receive_file(
+    url: &str,
+    prepare_upload: &PrepareUpload,
+    unknown_count: &mut usize,
+) -> Result<(File, usize, String), DynError> {
+    let file_id = url
+        .split("?")
+        .nth(1)
+        .ok_or("500")?
+        .split("&")
+        .find(|s| s.starts_with("fileId="))
+        .and_then(|s| s.get(7..))
+        .map(|s| s.to_string())
+        .ok_or("500")?;
+
+    let file_path = match prepare_upload.files.get(&file_id) {
+        Some(file_info) => &file_info.file_name,
+        None => {
+            *unknown_count += 1;
+            &format!("localsend_file_{}", unknown_count)
+        }
+    };
+
+    let file_size = prepare_upload.files.get(&file_id).ok_or("500")?.size;
+
+    let file = File::create(file_path)?;
+    Ok((file, file_size, file_id))
 }
