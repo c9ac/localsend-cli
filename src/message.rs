@@ -1,7 +1,14 @@
 use miniserde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use rs_machineid::MachineId;
+use std::{collections::HashMap, net::SocketAddr};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone)]
+pub struct Device {
+    pub info: Announce,
+    pub address: SocketAddr,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Announce {
     pub alias: String,
     pub version: String,
@@ -43,12 +50,15 @@ pub struct AcceptUpload {
 
 impl Announce {
     pub fn build(alias: &str, port: usize) -> Self {
+        let fingerprint =
+            MachineId::get_hashed("localsend-cli").unwrap_or("localsendDevice".into());
+
         Announce {
             alias: alias.into(),
             version: "2.0".into(),
             device_model: None,
             device_type: Some("headless".into()),
-            fingerprint: "tmp_fingerprint".into(),
+            fingerprint,
             port,
             protocol: "http".into(),
             download: Some(false),

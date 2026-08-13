@@ -1,12 +1,14 @@
 [package]
 name    = "localsend-cli"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2024"
 
 [dependencies]
-miniserde = "0.1.45"
-tiny_http = "0.12.0"
-zfish     = "0.1.10"
+infer        = "0.22.0"
+miniserde    = "0.1.45"
+rs-machineid = "0.2.0"
+tiny_http    = "0.12.0"
+zfish        = "0.1.10"
 
 [profile.release]
 codegen-units = 1
