@@ -1,13 +1,6 @@
-use crate::{AcceptUpload, Announce, DynError, PrepareUpload, convert_storage_unit};
+use crate::{DynError, announce, convert_storage_unit, protocol::*};
 use miniserde::json;
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::Write,
-    net::{Ipv4Addr, UdpSocket},
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, fs::File, io::Write};
 use tiny_http::{Method, Response, Server, StatusCode};
 use zfish::{
     Alignment, ProgressBar, ProgressStyle, Prompt, Terminal,
@@ -15,19 +8,18 @@ use zfish::{
 };
 
 pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
-    let device = Announce::build(alias, port);
+    let device = Announce::new(alias, port);
 
     announce(&device)?;
 
     let server = Server::http(format!("0.0.0.0:{}", port))?;
-    let mut prepare_upload = PrepareUpload::new();
+    let mut prepare_upload = PrepareUpload::empty();
     let mut unknown_count = 0;
     let mut file_status = HashMap::new();
 
     for mut request in server.incoming_requests() {
         // Listen to new urls if prepare upload request occur
-        if request.url() == "/api/localsend/v2/prepare-upload" && request.method() == &Method::Post
-        {
+        if request.url() == PREPARE_UPLOAD_URI && request.method() == &Method::Post {
             unknown_count = 0;
             file_status.clear();
 
@@ -47,15 +39,12 @@ pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
             };
         }
         // Listen to file upload
-        else if request.url().starts_with("/api/localsend/v2/upload?")
-            && request.method() == &Method::Post
-        {
+        else if request.url().starts_with(UPLOAD_PREFFIX) && request.method() == &Method::Post {
             let (mut file, file_size, file_id) =
                 receive_file(request.url(), &prepare_upload, &mut unknown_count)?;
 
             // Setup progress bar
-            let mut progress_bar =
-                ProgressBar::new(file_size as u64).with_style(ProgressStyle::Arrow);
+            let mut progress_bar = ProgressBar::new(file_size).with_style(ProgressStyle::Arrow);
 
             // Show `downloading` status
             file_status.insert(file_id.to_string(), "downloading".to_string());
@@ -84,23 +73,6 @@ pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
             draw_table(&prepare_upload, &file_status)?;
         }
     }
-
-    Ok(())
-}
-
-fn announce(device: &Announce) -> Result<(), DynError> {
-    let multicast_addr = Ipv4Addr::new(224, 0, 0, 167);
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
-    socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::UNSPECIFIED)?;
-
-    let announce = json::to_string(device).into_bytes();
-
-    thread::spawn(move || {
-        loop {
-            let _ = socket.send_to(&announce, "224.0.0.167:53317");
-            thread::sleep(Duration::from_secs(3));
-        }
-    });
 
     Ok(())
 }
@@ -168,7 +140,7 @@ fn receive_file(
     url: &str,
     prepare_upload: &PrepareUpload,
     unknown_count: &mut usize,
-) -> Result<(File, usize, String), DynError> {
+) -> Result<(File, u64, String), DynError> {
     let file_id = url
         .split("?")
         .nth(1)

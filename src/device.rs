@@ -1,4 +1,4 @@
-use crate::{Announce, Device, DynError};
+use crate::{Announce, DynError};
 use miniserde::json;
 use std::{
     collections::HashMap,
@@ -7,6 +7,12 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+#[derive(Clone)]
+pub struct Device {
+    pub info: Announce,
+    pub address: String,
+}
 
 pub fn announce(device: &Announce) -> Result<(), DynError> {
     let multicast_addr = Ipv4Addr::new(224, 0, 0, 167);
@@ -39,8 +45,12 @@ pub fn discover(timeout: Duration) -> Result<Vec<Device>, DynError> {
         let mut buf = [0; 1024];
         match socket.recv_from(&mut buf) {
             Ok((n, src)) => {
-                let announce: Announce = json::from_str(&String::from_utf8_lossy(&buf[..n]))?;
-                filter.insert(announce.fingerprint.clone(), (announce, src));
+                if let Ok(announce) =
+                    json::from_str::<Announce>(&String::from_utf8_lossy(&buf[..n]))
+                {
+                    let src = src.to_string().split(":").next().unwrap().to_string();
+                    filter.insert(announce.fingerprint.clone(), (announce, src));
+                }
             }
             Err(e) if e.kind() == WouldBlock || e.kind() == TimedOut => continue,
             Err(e) => return Err(e.into()),

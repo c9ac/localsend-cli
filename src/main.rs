@@ -1,5 +1,5 @@
-use localsend_cli::{DynError, receive};
-use std::process::exit;
+use localsend_cli::{DynError, receive, send};
+use std::{path::PathBuf, process::exit};
 use zfish::command::{App, Arg, Command};
 
 fn main() -> Result<(), DynError> {
@@ -22,7 +22,14 @@ fn main() -> Result<(), DynError> {
         .subcommand(
             Command::new("send")
                 .about("Send file or text to other devices")
-                .arg(Arg::new("file").short('f').long("file").required(true)),
+                .arg(
+                    Arg::new("file")
+                        .short('f')
+                        .long("file")
+                        .takes_value(true)
+                        .multiple(true),
+                )
+                .arg(Arg::new("timeout").short('t').long("timeout")),
         );
 
     let matches = app.get_matches();
@@ -33,8 +40,15 @@ fn main() -> Result<(), DynError> {
     match matches.subcommand() {
         Some(("receive", _)) => receive(alias, port),
         Some(("send", sub_matches)) => {
-            let _file = sub_matches.value_of("file");
-            todo!();
+            let files: Vec<PathBuf> = sub_matches
+                .values_of("file")
+                .ok_or("Please specify files")?
+                .iter()
+                .map(PathBuf::from)
+                .collect();
+            let timeout = sub_matches.value_of("timeout").unwrap_or("5").parse()?;
+
+            send(files, timeout, alias, port)
         }
         _ => {
             eprintln!("Use --help for usage");

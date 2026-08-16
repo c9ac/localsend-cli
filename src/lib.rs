@@ -1,11 +1,15 @@
 mod convert_unit;
-mod message;
+mod device;
+mod protocol;
 mod receive;
+mod send;
 
 use std::error::Error;
 
 pub use convert_unit::*;
-pub use message::*;
+pub use device::*;
+pub use protocol::*;
 pub use receive::*;
+pub use send::*;
 
 pub type DynError = Box<dyn Error + Send + Sync + 'static>;

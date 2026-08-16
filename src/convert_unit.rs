@@ -1,4 +1,4 @@
-pub fn convert_storage_unit(bytes: usize) -> String {
+pub fn convert_storage_unit(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
 
     let mut result: f64 = bytes as f64;
