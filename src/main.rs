@@ -1,5 +1,5 @@
 use localsend_cli::{DynError, receive, send};
-use std::{path::PathBuf, process::exit};
+use std::{path::PathBuf, process::exit, time::Duration};
 use zfish::command::{App, Arg, Command};
 
 fn main() -> Result<(), DynError> {
@@ -46,7 +46,9 @@ fn main() -> Result<(), DynError> {
                 .iter()
                 .map(PathBuf::from)
                 .collect();
+
             let timeout = sub_matches.value_of("timeout").unwrap_or("5").parse()?;
+            let timeout = Duration::from_secs(timeout);
 
             send(files, timeout, alias, port)
         }

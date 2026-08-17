@@ -1,17 +1,35 @@
 [package]
 name    = "localsend-cli"
-version = "0.0.8"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
-infer        = "0.22.0"
-mime_guess   = "2.0.5"
-miniserde    = "0.1.45"
+infer = {
+    version = "0.22.0",
+    default-features = false,
+    features = ["std"],
+}
+mime_guess = {
+  version = "2.0.5",
+  default-features = false
+}
+miniserde = {
+    version = "0.1.45",
+    default-features = false,
+    features = ["std"],
+}
 rs-machineid = "0.2.0"
 rune-sha256  = "0.1.1"
 tiny_http    = "0.12.0"
-ureq         = "3.4.0"
-zfish        = "0.1.10"
+ureq = {
+  version = "3.4.0",
+  default-features = false
+}
+zfish = {
+    version = "0.1.10",
+    default-features = false,
+    features = ["interactive", "progress"],
+}
 
 [profile.release]
 codegen-units = 1

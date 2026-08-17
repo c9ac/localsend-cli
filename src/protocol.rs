@@ -5,7 +5,19 @@ use std::{collections::HashMap, path::PathBuf};
 use crate::DynError;
 
 pub const PREPARE_UPLOAD_URI: &str = "/api/localsend/v2/prepare-upload";
+
 pub const UPLOAD_PREFFIX: &str = "/api/localsend/v2/upload?";
+pub fn build_upload_uri(
+    http_address: &str,
+    session_id: &str,
+    file_id: &str,
+    token: &str,
+) -> String {
+    format!(
+        "{}{}sessionId={}&fileId={}&token={}",
+        http_address, UPLOAD_PREFFIX, session_id, file_id, token
+    )
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Announce {
@@ -28,7 +40,7 @@ pub struct PrepareUpload {
     pub files: HashMap<String, FileInfo>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct FileInfo {
     pub id: String,
     #[serde(rename = "fileName")]
@@ -80,22 +92,8 @@ impl Announce {
     }
 }
 
-impl PrepareUpload {
-    pub fn new(files: Vec<PathBuf>, alias: &str, port: usize) -> Result<Self, DynError> {
-        let info = Announce::new(alias, port);
-
-        let files: HashMap<String, FileInfo> = files
-            .into_iter()
-            .map(|path| {
-                let file_info = FileInfo::new(&path)?;
-                Ok((file_info.id.clone(), file_info))
-            })
-            .collect::<Result<_, DynError>>()?;
-
-        Ok(Self { info, files })
-    }
-
-    pub fn empty() -> Self {
+impl Default for PrepareUpload {
+    fn default() -> Self {
         PrepareUpload {
             info: Announce::empty(),
             files: HashMap::new(),
@@ -105,10 +103,6 @@ impl PrepareUpload {
 
 impl FileInfo {
     pub fn new(file: &PathBuf) -> Result<Self, DynError> {
-        if !file.exists() {
-            return Err(format!("File {} was not found", file.display()).into());
-        }
-
         let file_name = file
             .file_name()
             .and_then(|os| os.to_str())

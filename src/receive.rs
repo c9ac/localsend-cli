@@ -13,7 +13,7 @@ pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
     announce(&device)?;
 
     let server = Server::http(format!("0.0.0.0:{}", port))?;
-    let mut prepare_upload = PrepareUpload::empty();
+    let mut prepare_upload = PrepareUpload::default();
     let mut unknown_count = 0;
     let mut file_status = HashMap::new();
 
