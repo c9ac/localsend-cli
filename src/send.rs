@@ -7,14 +7,14 @@ use zfish::{
     table::{Alignment, BoxStyle, Table},
 };
 
-pub fn send(
+pub async fn send(
     files: Vec<PathBuf>,
-    timeout: Duration,
+    timeout: u64,
     alias: &str,
     port: usize,
 ) -> Result<(), DynError> {
     // Interactive select device
-    let device = select_device(timeout)?;
+    let device = select_device(timeout).await?;
 
     // Build PrepareUpload
     let (prepare_upload, id_path) = build_prepare_upload(files, alias, port)?;
@@ -49,9 +49,9 @@ pub fn send(
     Ok(())
 }
 
-fn select_device(timeout: Duration) -> Result<Device, DynError> {
+async fn select_device(timeout: u64) -> Result<Device, DynError> {
     // Discover through udp multicast
-    let mut devices = discover(timeout)?;
+    let mut devices = discover(Duration::from_secs(timeout)).await?;
 
     // Draw table and let user select
     let mut table = Table::new(vec!["", "Alias", "Type"]);

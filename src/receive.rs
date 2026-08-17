@@ -7,10 +7,10 @@ use zfish::{
     table::{BoxStyle, Table},
 };
 
-pub fn receive(alias: &str, port: usize) -> Result<(), DynError> {
+pub async fn receive(alias: &str, port: usize) -> Result<(), DynError> {
     let device = Announce::new(alias, port);
 
-    announce(&device)?;
+    announce(&device).await?;
 
     let server = Server::http(format!("0.0.0.0:{}", port))?;
     let mut prepare_upload = PrepareUpload::default();

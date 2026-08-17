@@ -107,7 +107,7 @@ impl FileInfo {
             .file_name()
             .and_then(|os| os.to_str())
             .map(String::from)
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_else(|| "file".to_string());
 
         let file_type = match infer::get_from_path(file)? {
             Some(t) => t.mime_type(),

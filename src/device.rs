@@ -1,66 +1,74 @@
 use crate::{Announce, DynError};
 use miniserde::json;
+use smol::{Timer, net::UdpSocket};
+use smol_timeout::TimeoutExt;
 use std::{
     collections::HashMap,
-    io::ErrorKind::{TimedOut, WouldBlock},
-    net::{Ipv4Addr, UdpSocket},
-    thread,
+    net::{IpAddr, Ipv4Addr},
     time::{Duration, Instant},
 };
 
 #[derive(Clone)]
 pub struct Device {
     pub info: Announce,
-    pub address: String,
+    pub address: IpAddr,
 }
 
-pub fn announce(device: &Announce) -> Result<(), DynError> {
+pub async fn announce(device: &Announce) -> Result<(), DynError> {
+    // Setup udp
     let multicast_addr = Ipv4Addr::new(224, 0, 0, 167);
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
-    socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::UNSPECIFIED)?;
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    socket.join_multicast_v4(multicast_addr, Ipv4Addr::UNSPECIFIED)?;
 
+    // Setup data
     let announce = json::to_string(device).into_bytes();
 
-    thread::spawn(move || {
+    // Multicast (unblocking)
+    smol::spawn(async move {
         loop {
-            let _ = socket.send_to(&announce, "224.0.0.167:53317");
-            thread::sleep(Duration::from_secs(3));
+            let _ = socket.send_to(&announce, "224.0.0.167:53317").await;
+            Timer::after(Duration::from_secs(1)).await;
         }
-    });
+    })
+    .detach();
 
     Ok(())
 }
 
-pub fn discover(timeout: Duration) -> Result<Vec<Device>, DynError> {
-    let start = Instant::now();
+pub async fn discover(timeout: Duration) -> Result<Vec<Device>, DynError> {
+    // Begin time
+    let begin = Instant::now();
 
+    // Setup udp multicast
     let multicast_addr = Ipv4Addr::new(224, 0, 0, 167);
-    let socket = UdpSocket::bind("0.0.0.0:53317")?;
-    socket.set_read_timeout(Some(Duration::from_secs(1)))?;
-    socket.join_multicast_v4(&multicast_addr, &Ipv4Addr::UNSPECIFIED)?;
+    let socket = UdpSocket::bind("0.0.0.0:53317").await?;
+    socket.join_multicast_v4(multicast_addr, Ipv4Addr::UNSPECIFIED)?;
 
+    // Filter for duplicate equipment
     let mut filter = HashMap::new();
 
-    while start.elapsed() < timeout {
-        let mut buf = [0; 1024];
-        match socket.recv_from(&mut buf) {
-            Ok((n, src)) => {
-                if let Ok(announce) =
-                    json::from_str::<Announce>(&String::from_utf8_lossy(&buf[..n]))
-                {
-                    let src = src.to_string().split(":").next().unwrap().to_string();
-                    filter.insert(announce.fingerprint.clone(), (announce, src));
-                }
-            }
-            Err(e) if e.kind() == WouldBlock || e.kind() == TimedOut => continue,
-            Err(e) => return Err(e.into()),
-        };
+    // Receive
+    let mut buf = [0; 1024];
+    loop {
+        let remaining = timeout.saturating_sub(begin.elapsed()); // Never overflowed
+        if remaining.is_zero() {
+            break;
+        }
+
+        if let Some(Ok((n, src))) = socket.recv_from(&mut buf).timeout(remaining).await
+            // Only handle correct announcement
+            && let Ok(announce) = json::from_str::<Announce>(&String::from_utf8_lossy(&buf[..n]))
+        {
+            filter.insert(announce.fingerprint.clone(), (announce, src.ip()));
+        }
     }
 
+    // Exit when no devices was found
     if filter.is_empty() {
         return Err("No device was found".into());
     }
 
+    // Convert hashmap into vector
     let devices: Vec<Device> = filter
         .into_iter()
         .map(|(_, (announce, src))| Device {
