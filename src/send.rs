@@ -1,7 +1,7 @@
-use crate::{Device, DynError, discover, protocol::*};
+use crate::{DynError, device::*, http::*, protocol::*};
 use miniserde::json;
-use std::{collections::HashMap, fs::File, io::Read, path::PathBuf, time::Duration};
-use ureq::Error;
+use smol::fs::File;
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 use zfish::{
     Prompt,
     table::{Alignment, BoxStyle, Table},
@@ -18,32 +18,23 @@ pub async fn send(
 
     // Build PrepareUpload
     let (prepare_upload, id_path) = build_prepare_upload(files, alias, port)?;
-    let prepare_upload = json::to_string(&prepare_upload);
+    let prepare_upload = json::to_string(&prepare_upload).into_bytes();
 
-    let http_address = format!("http://{}:{}", device.address, device.info.port);
-    let uri = format!("{}{}", http_address, PREPARE_UPLOAD_URI);
-    let response = ureq::post(uri)
-        .content_type("application/json")
-        .send(&prepare_upload);
+    // Send upload request
+    let base_url = format!("{}:{}", device.address, device.info.port);
+    let accept_upload = post(&base_url, PREPARE_UPLOAD_URI, &prepare_upload).await?;
+    let accept_upload = String::from_utf8_lossy(&accept_upload);
 
-    // Handle rejection
-    if let Err(Error::StatusCode(403)) = response {
-        return Err("Request was rejected".into());
-    }
-    let response = response?;
-
-    // Get session id and file tokens
-    let mut body = String::new();
-    response.into_body().as_reader().read_to_string(&mut body)?;
-    let accept_upload: AcceptUpload = json::from_str(&body)?;
+    // Parse session id and file tokens
+    let accept_upload: AcceptUpload = json::from_str(&accept_upload)?;
 
     // Upload file
     for (file_id, token) in accept_upload.files {
         let path = id_path.get(&file_id).ok_or("Known file id")?;
-        let file_uri = build_upload_uri(&http_address, &accept_upload.session_id, &file_id, &token);
-        let file = File::open(path)?;
+        let file_uri = build_upload_path(&accept_upload.session_id, &file_id, &token);
+        let mut file = File::open(path).await?;
 
-        ureq::post(file_uri).send(file)?;
+        upload_file(&base_url, &file_uri, &mut file).await?;
     }
 
     Ok(())

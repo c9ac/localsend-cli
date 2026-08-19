@@ -23,7 +23,7 @@ pub async fn announce(device: &Announce) -> Result<(), DynError> {
     // Setup data
     let announce = json::to_string(device).into_bytes();
 
-    // Multicast (unblocking)
+    // Multicast
     smol::spawn(async move {
         loop {
             let _ = socket.send_to(&announce, "224.0.0.167:53317").await;

@@ -7,15 +7,10 @@ use crate::DynError;
 pub const PREPARE_UPLOAD_URI: &str = "/api/localsend/v2/prepare-upload";
 
 pub const UPLOAD_PREFFIX: &str = "/api/localsend/v2/upload?";
-pub fn build_upload_uri(
-    http_address: &str,
-    session_id: &str,
-    file_id: &str,
-    token: &str,
-) -> String {
+pub fn build_upload_path(session_id: &str, file_id: &str, token: &str) -> String {
     format!(
-        "{}{}sessionId={}&fileId={}&token={}",
-        http_address, UPLOAD_PREFFIX, session_id, file_id, token
+        "{}sessionId={}&fileId={}&token={}",
+        UPLOAD_PREFFIX, session_id, file_id, token
     )
 }
 

@@ -97,9 +97,9 @@ fn draw_table(
         .set_box_style(BoxStyle::Rounded)
         .set_column_alignment(5, Alignment::Center);
 
-    for (num, (file_id, file_info)) in (1..).zip(files) {
+    for (num, (file_id, file_info)) in files.iter().enumerate() {
         table.add_row(vec![
-            &format!("{}", num),
+            &format!("{}", num + 1),
             &file_info.file_name,
             &convert_storage_unit(file_info.size),
             &file_info.file_type,

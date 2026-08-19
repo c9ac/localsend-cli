@@ -1,6 +1,6 @@
 [package]
 name    = "localsend-cli"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 
 [dependencies]
@@ -11,8 +11,8 @@ rs-machineid = "0.2.0"
 rune-sha256 = "0.1.1"
 smol = "2.0.2"
 smol-timeout = "0.6.1"
+thiserror_lite = "0.1.0"
 tiny_http = "0.12.0"
-ureq = { version = "3.4.0", default-features = false }
 zfish = { version = "0.1.10", default-features = false, features = [
   "interactive",
   "progress",
