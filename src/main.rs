@@ -50,7 +50,7 @@ fn main() -> Result<(), DynError> {
 
                 let timeout = sub_matches.value_of("timeout").unwrap_or("5").parse()?;
 
-                post(files, timeout, alias, port).await
+                send(files, timeout, alias, port).await
             }
             _ => {
                 eprintln!("Use --help for usage");

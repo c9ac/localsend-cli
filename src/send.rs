@@ -17,7 +17,7 @@ pub async fn send(
     let device = select_device(timeout).await?;
 
     // Build PrepareUpload
-    let (prepare_upload, id_path) = build_prepare_upload(files, alias, port)?;
+    let (prepare_upload, id_path) = build_prepare_upload(files, alias, port).await?;
     let prepare_upload = json::to_string(&prepare_upload).into_bytes();
 
     // Send upload request
@@ -30,7 +30,7 @@ pub async fn send(
 
     // Upload file
     for (file_id, token) in accept_upload.files {
-        let path = id_path.get(&file_id).ok_or("Known file id")?;
+        let path = id_path.get(&file_id).ok_or("Unknown file id")?;
         let file_uri = build_upload_path(&accept_upload.session_id, &file_id, &token);
         let mut file = File::open(path).await?;
 
@@ -72,7 +72,7 @@ async fn select_device(timeout: u64) -> Result<Device, DynError> {
     Ok(device)
 }
 
-fn build_prepare_upload(
+async fn build_prepare_upload(
     files: Vec<PathBuf>,
     alias: &str,
     port: usize,
@@ -83,7 +83,7 @@ fn build_prepare_upload(
     let info = Announce::new(alias, port);
 
     for file in files {
-        let file_info = FileInfo::new(&file)?;
+        let file_info = FileInfo::new(&file).await?;
         let id = file_info.id.clone();
         id_path.insert(id.clone(), file);
         prepare_upload_files.insert(id, file_info);

@@ -1,8 +1,9 @@
+use crate::DynError;
 use miniserde::{Deserialize, Serialize};
 use rs_machineid::MachineId;
+use sha2::{Digest, Sha256};
+use smol::{fs::File, io::AsyncReadExt};
 use std::{collections::HashMap, path::PathBuf};
-
-use crate::DynError;
 
 pub const PREPARE_UPLOAD_URI: &str = "/api/localsend/v2/prepare-upload";
 
@@ -97,7 +98,7 @@ impl Default for PrepareUpload {
 }
 
 impl FileInfo {
-    pub fn new(file: &PathBuf) -> Result<Self, DynError> {
+    pub async fn new(file: &PathBuf) -> Result<Self, DynError> {
         let file_name = file
             .file_name()
             .and_then(|os| os.to_str())
@@ -112,7 +113,7 @@ impl FileInfo {
         }
         .to_string();
 
-        let sha256 = rune_sha256::hash_file(file)?;
+        let sha256 = hash_file(file).await?;
 
         let id: String = sha256.chars().take(8).collect();
 
@@ -125,4 +126,21 @@ impl FileInfo {
             preview: None,
         })
     }
+}
+
+async fn hash_file(file: &PathBuf) -> Result<String, DynError> {
+    let mut file = File::open(file).await?;
+    let mut hasher = Sha256::new();
+
+    let mut buf = [0u8; 1024 * 8];
+    loop {
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    let hash = hasher.finalize();
+    Ok(hex::encode(hash))
 }
